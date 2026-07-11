@@ -1906,13 +1906,25 @@ apply_base_core() {
   if locale -a 2>/dev/null | grep -Eiq '^en_US\.utf-?8$'; then
     notice 'en_US.UTF-8 locale is already generated; skipping.'
   else
-    run_as_root locale-gen en_US.UTF-8
+    if grep -Eq '^[[:space:]]*#[[:space:]]*en_US\.UTF-8[[:space:]]+UTF-8[[:space:]]*$' \
+      /etc/locale.gen; then
+      run_as_root sed -i -E \
+        's/^[[:space:]]*#[[:space:]]*(en_US\.UTF-8[[:space:]]+UTF-8)[[:space:]]*$/\1/' \
+        /etc/locale.gen
+    elif ! grep -Eq '^[[:space:]]*en_US\.UTF-8[[:space:]]+UTF-8[[:space:]]*$' \
+      /etc/locale.gen; then
+      die 'en_US.UTF-8 is missing from /etc/locale.gen'
+    fi
+    run_as_root locale-gen
+    if ! $DRY_RUN && ! locale -a 2>/dev/null | grep -Eiq '^en_US\.utf-?8$'; then
+      die 'locale-gen completed but en_US.UTF-8 is still unavailable'
+    fi
   fi
 
   if [ -r /etc/default/locale ] && grep -Fqx 'LANG=en_US.UTF-8' /etc/default/locale; then
     notice 'Default locale is already en_US.UTF-8; skipping.'
   else
-    run_as_root update-locale LANG=en_US.UTF-8
+    run_as_root env LC_ALL=C LANG=C update-locale LANG=en_US.UTF-8
   fi
 }
 
