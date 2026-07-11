@@ -216,6 +216,12 @@ register_options() {
     "Download and overwrite the repository-managed Zsh and Git configuration files." \
     detail_dotfiles packages_dotfiles plan_dotfiles apply_dotfiles
 
+  register_option \
+    yazi "" \
+    "Yazi file manager" \
+    "Install the current Yazi terminal file manager and ya helper." \
+    detail_yazi packages_yazi plan_yazi apply_yazi
+
   if [ "$OS_KIND" = "linux" ]; then
     register_group \
       base \
@@ -619,6 +625,14 @@ packages_dotfiles() {
   fi
 }
 
+packages_yazi() {
+  if [ "$OS_KIND" = "linux" ]; then
+    add_packages ca-certificates curl jq unzip
+  else
+    add_package yazi
+  fi
+}
+
 packages_none() {
   :
 }
@@ -783,6 +797,24 @@ plan_dotfiles() {
   printf '    - Make .zshrc load .zshrc.local when it does not already do so\n'
   printf '    - Make .gitconfig include .gitconfig.local when it does not already do so\n'
   printf '    - Refresh Zimfw modules when Zimfw is available\n'
+}
+
+detail_yazi() {
+  if [ "$OS_KIND" = "linux" ]; then
+    printf 'Download the latest official Yazi release from GitHub, verify the asset\n'
+    printf 'digest published by GitHub, and install yazi and ya in /usr/local/bin.\n'
+  else
+    printf 'Install the current yazi formula with Homebrew.\n'
+  fi
+}
+
+plan_yazi() {
+  if [ "$OS_KIND" = "linux" ]; then
+    printf '    - Resolve and download the latest official Yazi GitHub release\n'
+    printf '    - Verify its SHA-256 digest and install yazi and ya in /usr/local/bin\n'
+  else
+    printf '    - Install yazi with Homebrew\n'
+  fi
 }
 
 detail_base_group() {
@@ -1569,6 +1601,90 @@ install_fzf_latest() {
   run_as_root install -m 0755 "${TEMP_DIR}/fzf" /usr/local/bin/fzf
 }
 
+yazi_asset_arch() {
+  case "$(dpkg --print-architecture)" in
+    amd64) printf 'x86_64' ;;
+    arm64) printf 'aarch64' ;;
+    i386) printf 'i686' ;;
+    riscv64) printf 'riscv64gc' ;;
+    *) die "unsupported architecture for Yazi: $(dpkg --print-architecture)" ;;
+  esac
+}
+
+install_yazi_latest() {
+  local actual_hash api_response archive archive_name asset_arch current_version
+  local effective_url expected_digest expected_hash extract_dir tag version ya_binary yazi_binary
+  asset_arch="$(yazi_asset_arch)"
+
+  if $DRY_RUN; then
+    printf '+ resolve latest release from %q\n' 'https://github.com/sxyazi/yazi/releases/latest'
+    printf '+ download yazi-%s-unknown-linux-gnu.zip and release metadata\n' "$asset_arch"
+    printf '+ verify Yazi archive SHA-256 digest\n'
+    printf '+ install yazi and ya in /usr/local/bin\n'
+    return
+  fi
+
+  print_command curl \
+    --fail --show-error --silent --location --head \
+    --connect-timeout 10 --retry 3 \
+    --proto '=https' --tlsv1.2 \
+    --output /dev/null --write-out '%{url_effective}' \
+    'https://github.com/sxyazi/yazi/releases/latest'
+  effective_url="$(
+    curl \
+      --fail --show-error --silent --location --head \
+      --connect-timeout 10 --retry 3 \
+      --proto '=https' --tlsv1.2 \
+      --output /dev/null --write-out '%{url_effective}' \
+      'https://github.com/sxyazi/yazi/releases/latest'
+  )"
+  tag="${effective_url##*/}"
+  version="${tag#v}"
+  case "$tag" in
+    v[0-9]*) ;;
+    *) die "could not determine the latest Yazi version from: $effective_url" ;;
+  esac
+
+  current_version="$(yazi --version 2>/dev/null | awk '{print $2}' || true)"
+  if [ "$current_version" = "$version" ] && command -v ya >/dev/null 2>&1; then
+    notice "Yazi ${version} is already installed; skipping."
+    return
+  fi
+
+  ensure_temp_dir
+  archive_name="yazi-${asset_arch}-unknown-linux-gnu.zip"
+  archive="${TEMP_DIR}/${archive_name}"
+  api_response="${TEMP_DIR}/yazi-release.json"
+  extract_dir="${TEMP_DIR}/yazi-extract"
+  download_file \
+    "https://github.com/sxyazi/yazi/releases/download/${tag}/${archive_name}" \
+    "$archive"
+  download_file \
+    "https://api.github.com/repos/sxyazi/yazi/releases/tags/${tag}" \
+    "$api_response"
+
+  expected_digest="$(
+    jq -r --arg name "$archive_name" \
+      '.assets[] | select(.name == $name) | .digest' "$api_response"
+  )"
+  expected_hash="${expected_digest#sha256:}"
+  actual_hash="$(sha256sum "$archive" | awk '{print $1}')"
+  if [ "$expected_digest" = "$expected_hash" ] ||
+    [ "${#expected_hash}" -ne 64 ] || [ "$actual_hash" != "$expected_hash" ]; then
+    die "SHA-256 verification failed for ${archive_name}"
+  fi
+  notice "Verified SHA-256 for ${archive_name}."
+
+  mkdir -p "$extract_dir"
+  run unzip -q "$archive" -d "$extract_dir"
+  yazi_binary="$(find "$extract_dir" -type f -name yazi -print -quit)"
+  ya_binary="$(find "$extract_dir" -type f -name ya -print -quit)"
+  [ -n "$yazi_binary" ] && [ -n "$ya_binary" ] ||
+    die 'Yazi archive did not contain both yazi and ya binaries'
+  run_as_root install -m 0755 "$yazi_binary" /usr/local/bin/yazi
+  run_as_root install -m 0755 "$ya_binary" /usr/local/bin/ya
+}
+
 frp_asset_arch() {
   case "$(dpkg --print-architecture)" in
     amd64) printf 'amd64' ;;
@@ -1693,7 +1809,10 @@ prepare_privileges() {
     section 'Validate administrator access'
     run sudo -v
   elif [ "$OS_KIND" = "macos" ] &&
-    { is_selected common || is_selected lima || is_selected frpc || is_selected frps; }; then
+    {
+      is_selected common || is_selected lima || is_selected yazi ||
+        is_selected frpc || is_selected frps
+    }; then
     find_brew
     if [ -z "$BREW_BIN" ]; then
       command -v sudo >/dev/null 2>&1 || die "sudo is required to bootstrap Homebrew"
@@ -1927,7 +2046,7 @@ apply_dotfiles() {
     printf '+ append .zshrc.local loader to %q\n' "${target_dir}/.zshrc"
   else
     printf '\n%s\n%s\n' \
-      '# Load repository-managed local Zsh configuration.' \
+      '# Load custom Zsh configuration.' \
       "$local_loader" >>"${target_dir}/.zshrc"
     notice "Added .zshrc.local loader to ${target_dir}/.zshrc."
   fi
@@ -1952,6 +2071,15 @@ apply_dotfiles() {
       run env ZIM_HOME="$zim_home" ZIM_CONFIG_FILE="${target_dir}/.zimrc" \
         zsh -c "$zimfw_install" -- "$zimfw"
     fi
+  fi
+}
+
+apply_yazi() {
+  section 'Install Yazi file manager'
+  if [ "$OS_KIND" = "linux" ]; then
+    install_yazi_latest
+  else
+    notice 'Yazi was installed in the Homebrew package transaction.'
   fi
 }
 
