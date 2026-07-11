@@ -241,11 +241,11 @@ register_options() {
     register_group \
       ops \
       "Operations tools" \
-      "Process, network, and performance diagnostics." \
+      "System and network diagnostics." \
       detail_ops_group
     register_option \
       ops-process ops \
-      "Processes and monitoring" \
+      "System diagnostics" \
       "Process inspection, tracing, and system activity monitoring." \
       detail_ops_process packages_ops_process plan_none apply_noop
     register_option \
@@ -253,16 +253,10 @@ register_options() {
       "Network diagnostics" \
       "Connectivity, routing, DNS, packet capture, and scanning tools." \
       detail_ops_network packages_ops_network plan_none apply_noop
-    register_option \
-      ops-performance ops \
-      "Performance and eBPF" \
-      "NUMA, perf, bpftrace, and bpftool tooling." \
-      detail_ops_performance packages_ops_performance plan_none apply_noop
-
     register_group \
       dev \
       "Development environment" \
-      "Build, library, quality, debugging, and Python toolsets." \
+      "Build, performance, C/C++, debugging, and Python toolsets." \
       detail_dev_group
     register_option \
       dev-build dev \
@@ -270,14 +264,19 @@ register_options() {
       "GCC, Clang/LLVM, CMake, Ninja, Autotools, and ccache." \
       detail_dev_build packages_dev_build plan_none apply_noop
     register_option \
+      dev-performance dev \
+      "Performance and eBPF" \
+      "NUMA, perf, bpftrace, and bpftool tooling." \
+      detail_dev_performance packages_dev_performance plan_none apply_noop
+    register_option \
       dev-libs dev \
-      "Development libraries" \
+      "C/C++ libraries" \
       "OpenSSL, io_uring, gflags/glog, ncurses, and NUMA headers." \
       detail_dev_libs packages_dev_libs plan_none apply_noop
     register_option \
       dev-quality dev \
-      "Testing and quality" \
-      "GoogleTest, Benchmark, coverage, and static analysis." \
+      "Testing and static analysis" \
+      "Formatting, tests, benchmarks, coverage, and static analysis." \
       detail_dev_quality packages_dev_quality plan_none apply_noop
     register_option \
       dev-debug dev \
@@ -324,9 +323,15 @@ register_options() {
   else
     register_option \
       common "" \
-      "Homebrew and common commands" \
+      "Common commands" \
       "Install current Homebrew and commonly used terminal commands." \
       detail_common packages_common plan_common apply_noop
+
+    register_option \
+      lima "" \
+      "Lima virtualization" \
+      "Install Lima virtual machines with Homebrew." \
+      detail_lima packages_lima plan_none apply_noop
 
     register_group \
       frp \
@@ -636,11 +641,23 @@ packages_ops_process() {
 
 packages_ops_network() {
   add_packages \
-    iputils-ping dnsutils traceroute mtr-tiny whois \
+    iputils-ping traceroute mtr-tiny whois \
     tcpdump nmap netcat-openbsd socat iproute2 ethtool
+  add_dnsutils_package
 }
 
-packages_ops_performance() {
+add_dnsutils_package() {
+  if package_is_installed bind9-dnsutils || package_is_installed dnsutils; then
+    return
+  fi
+  if apt-cache show bind9-dnsutils >/dev/null 2>&1; then
+    add_package bind9-dnsutils
+  else
+    add_package dnsutils
+  fi
+}
+
+packages_dev_performance() {
   add_packages numactl bpftrace
   if [ "$LINUX_DISTRO" = "debian" ]; then
     add_packages bpftool linux-perf
@@ -652,7 +669,7 @@ packages_ops_performance() {
 packages_dev_build() {
   add_packages \
     build-essential autoconf automake \
-    clang clangd clang-format clang-tidy lld \
+    clang clangd lld \
     cmake ninja-build pkg-config libtool ccache
 }
 
@@ -663,7 +680,7 @@ packages_dev_libs() {
 }
 
 packages_dev_quality() {
-  add_packages libgtest-dev libbenchmark-dev gcovr cppcheck
+  add_packages clang-format clang-tidy libgtest-dev libbenchmark-dev gcovr cppcheck
 }
 
 packages_dev_debug() {
@@ -675,7 +692,11 @@ packages_dev_python() {
 }
 
 packages_common() {
-  add_packages bat exiftool fd fzf htop lima ripgrep tree
+  add_packages bat exiftool fd fzf htop ripgrep tree
+}
+
+packages_lima() {
+  add_package lima
 }
 
 packages_frpc() {
@@ -800,9 +821,8 @@ detail_base_transfer() {
 
 detail_ops_group() {
   printf 'Select the entire group or choose individual child options:\n\n'
-  printf '  Processes and monitoring Process inspection and activity monitoring.\n'
-  printf '  Network diagnostics      Connectivity, routing, DNS, and packets.\n'
-  printf '  Performance and eBPF     NUMA, perf, bpftrace, and bpftool.\n\n'
+  printf '  System diagnostics  Process inspection, tracing, and activity monitoring.\n'
+  printf '  Network diagnostics Connectivity, routing, DNS, and packets.\n\n'
   printf 'No child option enables a daemon or persistent service.\n'
 }
 
@@ -813,9 +833,10 @@ detail_ops_process() {
 detail_ops_network() {
   printf 'Packages\n  ping, DNS tools, traceroute, mtr, whois, tcpdump, nmap,\n'
   printf '  netcat, socat, iproute2, and ethtool.\n'
+  printf '  DNS tools use bind9-dnsutils when available, with dnsutils as fallback.\n'
 }
 
-detail_ops_performance() {
+detail_dev_performance() {
   printf 'Packages\n  numactl, bpftrace, bpftool, and perf.\n\n'
   printf 'The kernel tools package is selected separately for Debian and Ubuntu.\n'
   printf 'Some commands require root privileges or matching kernel features at runtime.\n'
@@ -824,8 +845,9 @@ detail_ops_performance() {
 detail_dev_group() {
   printf 'Select the entire group or choose individual child options:\n\n'
   printf '  Build toolchains       Compilers and build systems.\n'
-  printf '  Development libraries Common backend headers and libraries.\n'
-  printf '  Testing and quality    Test, benchmark, coverage, and analysis tools.\n'
+  printf '  Performance and eBPF  NUMA, perf, bpftrace, and bpftool.\n'
+  printf '  C/C++ libraries       Common backend headers and libraries.\n'
+  printf '  Testing and analysis  Formatting, tests, coverage, and analysis.\n'
   printf '  Debugging              Native debugging with gdb.\n'
   printf '  Python workflow        Python, pipx, and pre-commit.\n'
 }
@@ -840,7 +862,8 @@ detail_dev_libs() {
 }
 
 detail_dev_quality() {
-  printf 'Packages\n  GoogleTest, Google Benchmark, gcovr, and cppcheck.\n'
+  printf 'Packages\n  clang-format, clang-tidy, GoogleTest, Google Benchmark,\n'
+  printf '  gcovr, and cppcheck.\n'
 }
 
 detail_dev_debug() {
@@ -988,7 +1011,12 @@ detail_common() {
   printf 'Bootstrap\n  Download the official current Homebrew installer when brew is absent.\n\n'
   printf 'Shell integration\n'
   printf '  Add brew shellenv to ~/.zprofile once, for Apple Silicon or Intel.\n\n'
-  printf 'Formulae\n  bat, exiftool, fd, fzf, htop, lima, ripgrep, and tree.\n'
+  printf 'Formulae\n  bat, exiftool, fd, fzf, htop, ripgrep, and tree.\n'
+}
+
+detail_lima() {
+  printf 'Install the current Lima formula with Homebrew.\n'
+  printf 'Virtual machines and templates are not created or changed.\n'
 }
 
 plan_common() {
@@ -1665,7 +1693,7 @@ prepare_privileges() {
     section 'Validate administrator access'
     run sudo -v
   elif [ "$OS_KIND" = "macos" ] &&
-    { is_selected common || is_selected frpc || is_selected frps; }; then
+    { is_selected common || is_selected lima || is_selected frpc || is_selected frps; }; then
     find_brew
     if [ -z "$BREW_BIN" ]; then
       command -v sudo >/dev/null 2>&1 || die "sudo is required to bootstrap Homebrew"
