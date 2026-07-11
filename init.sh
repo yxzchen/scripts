@@ -784,7 +784,11 @@ plan_shell() {
 
 detail_dotfiles() {
   printf 'Download and overwrite these files in %s:\n\n' "$HOME"
-  printf '  .zimrc\n  .zshrc.local\n  .zshenv\n  .gitconfig.local\n\n'
+  printf '  .zimrc\n  .zshrc.local\n'
+  if [ "$OS_KIND" = "linux" ] && [ "$LINUX_DISTRO" = "ubuntu" ]; then
+    printf '  .zshenv\n'
+  fi
+  printf '  .gitconfig.local\n\n'
   printf 'Existing copies are replaced without backups.\n'
   printf 'If .zshrc does not load .zshrc.local, append an idempotent guarded source line.\n'
   printf 'If .gitconfig does not include .gitconfig.local, add a Git include entry.\n'
@@ -792,8 +796,13 @@ detail_dotfiles() {
 }
 
 plan_dotfiles() {
-  printf '    - Download four Zsh/Git configuration files from GitHub\n'
-  printf '    - Overwrite %s/{.zimrc,.zshrc.local,.zshenv,.gitconfig.local}\n' "$HOME"
+  if [ "$OS_KIND" = "linux" ] && [ "$LINUX_DISTRO" = "ubuntu" ]; then
+    printf '    - Download four Zsh/Git configuration files from GitHub\n'
+    printf '    - Overwrite %s/{.zimrc,.zshrc.local,.zshenv,.gitconfig.local}\n' "$HOME"
+  else
+    printf '    - Download three Zsh/Git configuration files from GitHub\n'
+    printf '    - Overwrite %s/{.zimrc,.zshrc.local,.gitconfig.local}\n' "$HOME"
+  fi
   printf '    - Make .zshrc load .zshrc.local when it does not already do so\n'
   printf '    - Make .gitconfig include .gitconfig.local when it does not already do so\n'
   printf '    - Refresh Zimfw modules when Zimfw is available\n'
@@ -1997,10 +2006,15 @@ apply_shell() {
 
 prepare_dotfile_templates() {
   local filename
+  local -a filenames
   ensure_temp_dir
   DOTFILE_TEMPLATE_DIR="${TEMP_DIR}/dotfiles"
   mkdir -p "$DOTFILE_TEMPLATE_DIR"
-  for filename in .zimrc .zshrc.local .zshenv .gitconfig.local; do
+  filenames=(.zimrc .zshrc.local .gitconfig.local)
+  if [ "$OS_KIND" = "linux" ] && [ "$LINUX_DISTRO" = "ubuntu" ]; then
+    filenames+=(.zshenv)
+  fi
+  for filename in "${filenames[@]}"; do
     download_file "${DOTFILES_BASE_URL}/${filename}" \
       "${DOTFILE_TEMPLATE_DIR}/${filename}"
   done
@@ -2025,6 +2039,7 @@ gitconfig_includes_local() {
 
 apply_dotfiles() {
   local filename gitconfig local_loader source_dir target_dir zim_home zimfw zimfw_install
+  local -a filenames
   section 'Install configuration files'
   prepare_dotfile_templates
   source_dir="$DOTFILE_TEMPLATE_DIR"
@@ -2036,7 +2051,11 @@ apply_dotfiles() {
   # shellcheck disable=SC2016
   zimfw_install='source "$1" install -q'
 
-  for filename in .zimrc .zshrc.local .zshenv .gitconfig.local; do
+  filenames=(.zimrc .zshrc.local .gitconfig.local)
+  if [ "$OS_KIND" = "linux" ] && [ "$LINUX_DISTRO" = "ubuntu" ]; then
+    filenames+=(.zshenv)
+  fi
+  for filename in "${filenames[@]}"; do
     run install -m 0644 "${source_dir}/${filename}" "${target_dir}/${filename}"
   done
 
