@@ -874,11 +874,11 @@ detail_dev_python() {
   printf 'Packages\n  Python development files, venv, pip, and pipx.\n\n'
   printf 'Configuration\n'
   printf '  Install pre-commit through pipx and configure its binary directory.\n'
-  printf '  The pipx binary directory is added to the shell that will be used after setup.\n'
+  printf '  The pipx binary directory is added to ~/.zshrc.\n'
 }
 
 plan_dev_python() {
-  printf '    - Ensure the pipx binary directory is on PATH for the selected login shell\n'
+  printf '    - Ensure the pipx binary directory is on PATH in ~/.zshrc\n'
   printf '    - Install pre-commit with pipx when it is not already present\n'
 }
 
@@ -2031,14 +2031,9 @@ apply_dev_python() {
   local pipx_bin_dir path_line zshrc
   section 'Configure development tools'
   pipx_bin_dir="${PIPX_BIN_DIR:-$HOME/.local/bin}"
-
-  if is_selected shell; then
-    zshrc="$HOME/.zshrc"
-    path_line="export PATH=\"${pipx_bin_dir}:\$PATH\""
-    ensure_line_in_file "$path_line" "$zshrc"
-  else
-    run pipx ensurepath
-  fi
+  zshrc="$HOME/.zshrc"
+  path_line="export PATH=\"\$PATH:${pipx_bin_dir}\""
+  ensure_line_in_file "$path_line" "$zshrc"
 
   if command -v pre-commit >/dev/null 2>&1 || [ -x "${pipx_bin_dir}/pre-commit" ]; then
     notice 'pre-commit is already installed; skipping.'
