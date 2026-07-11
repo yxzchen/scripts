@@ -28,6 +28,10 @@ unset LESS_TERMCAP_me
 unset LESS_TERMCAP_ue
 unset LESS_TERMCAP_us
 
+HISTFILE=~/.zsh_history
+HISTSIZE=100000
+SAVEHIST=100000
+
 alias history='history 1'
 alias ls='ls --color=auto'
 alias bat='bat --decorations=never'
