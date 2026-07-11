@@ -1830,7 +1830,7 @@ gitconfig_includes_local() {
 }
 
 apply_dotfiles() {
-  local filename gitconfig local_loader source_dir target_dir zimfw zimfw_install
+  local filename gitconfig local_loader source_dir target_dir zim_home zimfw zimfw_install
   section 'Install configuration files'
   prepare_dotfile_templates
   source_dir="$DOTFILE_TEMPLATE_DIR"
@@ -1867,13 +1867,14 @@ apply_dotfiles() {
     notice "Added .gitconfig.local include to ${gitconfig}."
   fi
 
-  zimfw="${ZIM_HOME:-${target_dir}/.zim}/zimfw.zsh"
+  zim_home="${ZIM_HOME:-${target_dir}/.zim}"
+  zimfw="${zim_home}/zimfw.zsh"
   if [ -f "$zimfw" ] || { $DRY_RUN && is_selected shell; }; then
     if $DRY_RUN; then
-      printf '+ env ZIM_CONFIG_FILE=%q zsh -c %q -- %q\n' \
-        "${target_dir}/.zimrc" "$zimfw_install" "$zimfw"
+      printf '+ env ZIM_HOME=%q ZIM_CONFIG_FILE=%q zsh -c %q -- %q\n' \
+        "$zim_home" "${target_dir}/.zimrc" "$zimfw_install" "$zimfw"
     else
-      run env ZIM_CONFIG_FILE="${target_dir}/.zimrc" \
+      run env ZIM_HOME="$zim_home" ZIM_CONFIG_FILE="${target_dir}/.zimrc" \
         zsh -c "$zimfw_install" -- "$zimfw"
     fi
   fi
