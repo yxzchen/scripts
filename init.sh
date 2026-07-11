@@ -591,6 +591,15 @@ package_is_installed() {
   [ "$status" = 'install ok installed' ]
 }
 
+package_is_available() {
+  local candidate
+  candidate="$(
+    LC_ALL=C apt-cache policy "$1" 2>/dev/null |
+      awk '$1 == "Candidate:" {candidate = $2} END {print candidate}'
+  )"
+  [ -n "$candidate" ] && [ "$candidate" != '(none)' ]
+}
+
 add_package() {
   local package existing
   package="$1"
@@ -1876,7 +1885,7 @@ configure_brew_shellenv() {
 
 install_planned_packages() {
   local package
-  local -a missing_packages
+  local -a available_packages missing_packages
   [ "${#PLANNED_PACKAGES[@]}" -gt 0 ] || return 0
 
   if [ "$OS_KIND" = "linux" ]; then
@@ -1891,7 +1900,19 @@ install_planned_packages() {
 
     section 'Install packages'
     run_as_root apt-get update
-    run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing_packages[@]}"
+    available_packages=()
+    for package in "${missing_packages[@]}"; do
+      if package_is_available "$package"; then
+        available_packages+=("$package")
+      else
+        warn "APT package is unavailable on this system; skipping: $package"
+      fi
+    done
+    if [ "${#available_packages[@]}" -eq 0 ]; then
+      notice 'No missing APT packages are available for this system; skipping installation.'
+      return
+    fi
+    run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${available_packages[@]}"
   else
     section 'Install packages'
     install_homebrew
