@@ -1359,10 +1359,54 @@ run() {
 }
 
 run_as_root() {
-  if [ "$(id -u)" -eq 0 ]; then
-    run "$@"
-  else
-    run sudo "$@"
+  local all_value http_value https_value no_value
+  local -a display_command proxy_environment
+  http_value="${http_proxy:-${HTTP_PROXY:-}}"
+  https_value="${https_proxy:-${HTTPS_PROXY:-}}"
+  all_value="${all_proxy:-${ALL_PROXY:-}}"
+  no_value="${no_proxy:-${NO_PROXY:-}}"
+  proxy_environment=()
+  display_command=()
+
+  if [ "$(id -u)" -ne 0 ]; then
+    display_command+=(sudo)
+  fi
+  display_command+=(env)
+
+  if [ -n "$http_value" ]; then
+    proxy_environment+=("http_proxy=${http_value}" "HTTP_PROXY=${http_value}")
+    display_command+=("http_proxy=<preserved>" "HTTP_PROXY=<preserved>")
+  fi
+  if [ -n "$https_value" ]; then
+    proxy_environment+=("https_proxy=${https_value}" "HTTPS_PROXY=${https_value}")
+    display_command+=("https_proxy=<preserved>" "HTTPS_PROXY=<preserved>")
+  fi
+  if [ -n "$all_value" ]; then
+    proxy_environment+=("all_proxy=${all_value}" "ALL_PROXY=${all_value}")
+    display_command+=("all_proxy=<preserved>" "ALL_PROXY=<preserved>")
+  fi
+  if [ -n "$no_value" ]; then
+    proxy_environment+=("no_proxy=${no_value}" "NO_PROXY=${no_value}")
+    display_command+=("no_proxy=<preserved>" "NO_PROXY=<preserved>")
+  fi
+
+  if [ "${#proxy_environment[@]}" -eq 0 ]; then
+    if [ "$(id -u)" -eq 0 ]; then
+      run "$@"
+    else
+      run sudo "$@"
+    fi
+    return
+  fi
+
+  display_command+=("$@")
+  print_command "${display_command[@]}"
+  if ! $DRY_RUN; then
+    if [ "$(id -u)" -eq 0 ]; then
+      env "${proxy_environment[@]}" "$@"
+    else
+      sudo env "${proxy_environment[@]}" "$@"
+    fi
   fi
 }
 
