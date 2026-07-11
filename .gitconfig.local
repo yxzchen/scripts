@@ -1,0 +1,114 @@
+
+[core]
+    editor = vim
+    autocrlf = input
+    whitespace = trailing-space,space-before-tab
+    pager = less -FRSX
+
+[pull]
+    rebase = true
+
+[rebase]
+    autoStash = true
+
+[fetch]
+    prune = true
+    pruneTags = true
+
+[push]
+    default = simple
+    followTags = true
+
+[merge]
+    conflictstyle = diff3
+
+[diff]
+    tool = vimdiff
+
+[alias]
+    aliases = config --get-regexp ^alias\
+
+    # ---- Basics ----
+    co = checkout
+    br = branch
+    st = status
+    ci = commit
+    cm = commit -m
+    ca = commit --amend
+    caa = commit --amend --no-edit
+    df = diff
+
+    # ---- Modern commands (Git >= 2.23) ----
+    sw = switch
+    swc = switch -c
+    rs = restore
+    rss = restore --staged
+
+    # ---- Logs ----
+    lg = log --oneline --graph --decorate
+    lga = log --oneline --graph --decorate --all
+    last = log -1 HEAD
+    ll = log --stat
+    lld = log --stat --decorate
+
+    # ---- Staging area ----
+    unstage = restore --staged
+    discard = restore
+
+    # ---- Remote operations ----
+    pl = pull
+    ps = push
+    pf = push --force-with-lease
+    fp = fetch --prune
+    fpa = fetch --prune --all
+
+    # ---- Rebase / fixup ----
+    rb = rebase
+    rbi = rebase -i
+    rbc = rebase --continue
+    rba = rebase --abort
+    rbs = rebase --skip
+
+    # ---- Stash ----
+    ss = stash
+    ssp = stash push
+    ssa = stash apply
+    ssl = stash list
+    ssd = stash drop
+
+    # ---- Reset (use with care) ----
+    rsh = reset --hard
+    rsm = reset --mixed
+    rssf = reset --soft
+
+    # ---- Working tree cleanup (dangerous) ----
+    cleanall = clean -xfd
+
+    # ---- Branch inspection ----
+    brr = branch -r
+    brv = branch -vv
+
+    # ---- Current branch name ----
+    current = rev-parse --abbrev-ref HEAD
+
+    # ---- Fixup / squash workflow ----
+    fix = commit --fixup
+    squash = commit --squash
+
+    # ---- Interactive rebase with autosquash ----
+    rbis = rebase -i --autosquash
+
+    # ---- Recently updated local branches ----
+    recent = for-each-ref --sort=-committerdate refs/heads --format=\"%(committerdate:short) %(refname:short)\"
+
+[status]
+    showUntrackedFiles = all
+
+[help]
+    autocorrect = 1
+
+[credential]
+    helper = cache --timeout=3600
+
+[gc]
+    auto = 256

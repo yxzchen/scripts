@@ -1,0 +1,37 @@
+images:
+- location: "https://chuangtzu.ftp.acc.umu.se/images/cloud/trixie/20260623-2518/debian-13-genericcloud-arm64-20260623-2518.qcow2"
+  arch: "aarch64"
+  digest: "sha512:fd35e5ec7bd31bc3821ba43135574ac42bdf0ded4dc6e3c8a86995e00b4206db60f2a7782bb9d94188f2b302df782d3afb5b13bdeaba25efe8c39bc51cec83a8"
+
+vmType: "vz"
+
+cpus: 8
+memory: 16GiB
+disk: 100GiB
+
+networks:
+- vzNAT: true
+
+ssh:
+  loadDotSSHPubKeys: true
+
+containerd:
+  system: false
+  user: false
+
+portForwards:
+  - guestIP: 0.0.0.0
+    proto: any
+    ignore: true
+  - guestIP: 127.0.0.1
+    proto: any
+    ignore: true
+
+propagateProxyEnv: false
+
+provision:
+- mode: system
+  script: |
+    #!/bin/sh
+    mkdir -p /etc/cloud/cloud.cfg.d
+    echo "ssh_deletekeys: false" > /etc/cloud/cloud.cfg.d/lima-local.cfg

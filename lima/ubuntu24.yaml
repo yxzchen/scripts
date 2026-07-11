@@ -1,0 +1,37 @@
+images:
+- location: "https://cloud-images.ubuntu.com/releases/noble/release-20260518/ubuntu-24.04-server-cloudimg-arm64.img"
+  arch: "aarch64"
+  digest: "sha256:6a61b967ba4a27dd1966f835a67643073ed55c2860ce3dc1cb0517282e6b8bec"
+
+vmType: "vz"
+
+cpus: 8
+memory: 16GiB
+disk: 100GiB
+
+networks:
+- vzNAT: true
+
+ssh:
+  loadDotSSHPubKeys: true
+
+containerd:
+  system: false
+  user: false
+
+portForwards:
+  - guestIP: 0.0.0.0
+    proto: any
+    ignore: true
+  - guestIP: 127.0.0.1
+    proto: any
+    ignore: true
+
+propagateProxyEnv: false
+
+provision:
+- mode: system
+  script: |
+    #!/bin/sh
+    mkdir -p /etc/cloud/cloud.cfg.d
+    echo "ssh_deletekeys: false" > /etc/cloud/cloud.cfg.d/lima-local.cfg
