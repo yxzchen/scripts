@@ -574,6 +574,12 @@ parse_selection() {
 
 # Package catalog ------------------------------------------------------------
 
+package_is_installed() {
+  local status
+  status="$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null || true)"
+  [ "$status" = 'install ok installed' ]
+}
+
 add_package() {
   local package existing
   package="$1"
@@ -681,6 +687,7 @@ packages_frps() {
 }
 
 packages_warp() {
+  package_is_installed cloudflare-warp && return
   add_packages ca-certificates curl gnupg
 }
 
@@ -960,8 +967,12 @@ detail_warp() {
 }
 
 plan_warp() {
-  printf "    - Install Cloudflare's current APT signing key and repository\n"
-  printf '    - Refresh APT metadata and install cloudflare-warp\n'
+  if package_is_installed cloudflare-warp; then
+    printf '    - cloudflare-warp is already installed; skip its APT repository refresh\n'
+  else
+    printf "    - Install Cloudflare's current APT signing key and repository\n"
+    printf '    - Refresh APT metadata and install cloudflare-warp\n'
+  fi
   printf '    - Enable and start warp-svc.service\n'
   printf '    - Register WARP when needed and configure SOCKS5 on 127.0.0.1:%s\n' \
     "$WARP_PROXY_PORT"
@@ -1261,22 +1272,41 @@ choose_options() {
 # Planning and confirmation --------------------------------------------------
 
 print_package_list() {
-  local index group previous_group
+  local index group package previous_group
   previous_group=""
   index=0
   while [ "$index" -lt "${#PLANNED_PACKAGES[@]}" ]; do
+    package="${PLANNED_PACKAGES[$index]}"
+    if [ "$OS_KIND" = "linux" ] && package_is_installed "$package"; then
+      index=$((index + 1))
+      continue
+    fi
     group="${PLANNED_PACKAGE_GROUPS[$index]}"
     if [ "$group" != "$previous_group" ]; then
       printf '      %s:\n' "$group"
       previous_group="$group"
     fi
-    printf '        %s\n' "${PLANNED_PACKAGES[$index]}"
+    printf '        %s\n' "$package"
     index=$((index + 1))
   done
 }
 
+pending_package_count() {
+  local count package
+  if [ "$OS_KIND" != "linux" ]; then
+    printf '%s' "${#PLANNED_PACKAGES[@]}"
+    return
+  fi
+
+  count=0
+  for package in "${PLANNED_PACKAGES[@]}"; do
+    package_is_installed "$package" || count=$((count + 1))
+  done
+  printf '%s' "$count"
+}
+
 preview_plan() {
-  local callback has_changes id index marker parent state
+  local callback has_changes id index marker parent pending_packages state
   printf '\nInstallation plan\n\n'
   printf '  Selected options\n'
   index=0
@@ -1297,14 +1327,19 @@ preview_plan() {
 
   if [ "${#PLANNED_PACKAGES[@]}" -gt 0 ]; then
     printf '\n  Package transaction\n'
-    if [ "$OS_KIND" = "linux" ]; then
+    pending_packages="$(pending_package_count)"
+    if [ "$OS_KIND" = "linux" ] && [ "$pending_packages" -eq 0 ]; then
+      printf '    - All required APT packages are already installed\n'
+      printf '    - Skip APT metadata refresh and package installation\n'
+    elif [ "$OS_KIND" = "linux" ]; then
       printf '    - Refresh APT metadata once\n'
-      printf '    - Install all packages in one deduplicated APT transaction:\n'
+      printf '    - Install missing packages in one deduplicated APT transaction:\n'
+      print_package_list
     else
       printf '    - Update Homebrew once\n'
       printf '    - Install all formulae in one deduplicated Homebrew transaction:\n'
+      print_package_list
     fi
-    print_package_list
   fi
 
   has_changes=false
@@ -1684,13 +1719,25 @@ configure_brew_shellenv() {
 }
 
 install_planned_packages() {
+  local package
+  local -a missing_packages
   [ "${#PLANNED_PACKAGES[@]}" -gt 0 ] || return 0
-  section 'Install packages'
 
   if [ "$OS_KIND" = "linux" ]; then
+    missing_packages=()
+    for package in "${PLANNED_PACKAGES[@]}"; do
+      package_is_installed "$package" || missing_packages+=("$package")
+    done
+    if [ "${#missing_packages[@]}" -eq 0 ]; then
+      notice 'All required APT packages are already installed; skipping APT refresh.'
+      return
+    fi
+
+    section 'Install packages'
     run_as_root apt-get update
-    run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${PLANNED_PACKAGES[@]}"
+    run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing_packages[@]}"
   else
+    section 'Install packages'
     install_homebrew
     configure_brew_shellenv
     run "$BREW_BIN" update
@@ -2129,6 +2176,11 @@ install_cloudflare_warp() {
     amd64 | arm64) ;;
     *) die "unsupported architecture for Cloudflare WARP: $arch" ;;
   esac
+  if package_is_installed cloudflare-warp; then
+    notice 'cloudflare-warp is already installed; skipping its APT repository refresh.'
+    run_as_root systemctl enable --now warp-svc.service
+    return
+  fi
   ensure_temp_dir
   key="${TEMP_DIR}/cloudflare-warp-key.gpg"
   dearmored="${TEMP_DIR}/cloudflare-warp-archive-keyring.gpg"
