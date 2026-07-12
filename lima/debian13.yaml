@@ -15,10 +15,6 @@ networks:
 ssh:
   loadDotSSHPubKeys: true
 
-containerd:
-  system: false
-  user: false
-
 portForwards:
   - guestIP: 0.0.0.0
     proto: any
@@ -28,6 +24,10 @@ portForwards:
     ignore: true
 
 propagateProxyEnv: false
+
+containerd:
+  system: false
+  user: false
 
 provision:
 - mode: system

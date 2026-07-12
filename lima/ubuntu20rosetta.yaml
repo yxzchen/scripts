@@ -1,0 +1,59 @@
+images:
+- location: "https://cloud-images.ubuntu.com/releases/focal/release-20250624/ubuntu-20.04-server-cloudimg-arm64.img"
+  arch: "aarch64"
+
+vmType: "vz"
+vmOpts:
+  vz:
+    rosetta:
+      enabled: true
+      binfmt: true
+
+cpus: 10
+memory: 16GiB
+disk: 100GiB
+
+networks:
+- vzNAT: true
+
+ssh:
+  loadDotSSHPubKeys: true
+
+portForwards:
+  - guestIP: 0.0.0.0
+    proto: any
+    ignore: true
+  - guestIP: 127.0.0.1
+    proto: any
+    ignore: true
+
+propagateProxyEnv: false
+
+containerd:
+  system: false
+  user: false
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/sh
+      set -eu
+
+      mkdir -p /etc/cloud/cloud.cfg.d
+      echo "ssh_deletekeys: false" > /etc/cloud/cloud.cfg.d/lima-local.cfg
+
+      conf=/usr/lib/binfmt.d/rosetta.conf
+      entry=/proc/sys/fs/binfmt_misc/rosetta
+
+      [ -x /mnt/lima-rosetta/rosetta ] || exit 0
+      [ -f "$conf" ] || exit 0
+
+      # Preserve argv[0] when Rosetta handles amd64 executables.
+      sed -i 's/:OCF$/:POCF/' "$conf"
+
+      if ! grep -q '^flags:.*P' "$entry" 2>/dev/null; then
+          if [ -e "$entry" ]; then
+              echo -1 > "$entry"
+          fi
+          systemctl restart systemd-binfmt.service
+      fi
