@@ -19,6 +19,7 @@ readonly BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HE
 readonly DOTFILES_BASE_URL="${DOTFILES_BASE_URL:-https://raw.githubusercontent.com/yxzchen/scripts/master}"
 readonly WARP_PROXY_PORT=40000
 readonly WARP_KEY_FINGERPRINT="C068A2B5771775193CBE1F2F6E2DD2174FA1C3BA"
+readonly DOCKER_KEY_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
 
 # CLI and runtime state
 DRY_RUN=false
@@ -326,6 +327,12 @@ register_options() {
       "Cloudflare WARP proxy" \
       "Install Cloudflare WARP and configure its local SOCKS5 proxy." \
       detail_warp packages_warp plan_warp apply_warp
+
+    register_option \
+      docker "" \
+      "Docker Engine" \
+      "Install the basic Docker engine, CLI, and containerd components." \
+      detail_docker packages_docker plan_docker apply_docker
   else
     register_option \
       common "" \
@@ -735,6 +742,17 @@ packages_warp() {
   add_packages ca-certificates curl gnupg
 }
 
+docker_components_installed() {
+  package_is_installed docker-ce &&
+    package_is_installed docker-ce-cli &&
+    package_is_installed containerd.io
+}
+
+packages_docker() {
+  docker_components_installed && return
+  add_packages ca-certificates curl gnupg
+}
+
 build_package_plan() {
   local index id callback
   PLANNED_PACKAGES=()
@@ -1050,6 +1068,25 @@ plan_warp() {
   printf '    - Register WARP when needed and configure SOCKS5 on 127.0.0.1:%s\n' \
     "$WARP_PROXY_PORT"
   printf '    - Connect the WARP proxy\n'
+}
+
+detail_docker() {
+  printf "Install Docker's basic components from Docker's signed stable APT repository:\n\n"
+  printf '  docker-ce\n  docker-ce-cli\n  containerd.io\n\n'
+  printf 'Enable and start the Docker service, then add the current user to the docker group.\n'
+  printf 'Docker Compose, Buildx, and rootless extras are excluded.\n'
+  printf 'Membership in the docker group grants root-equivalent access and requires a new login.\n'
+}
+
+plan_docker() {
+  if docker_components_installed; then
+    printf '    - Basic Docker components are already installed; skip repository refresh\n'
+  else
+    printf "    - Install Docker's current APT signing key and stable repository\n"
+    printf '    - Install docker-ce, docker-ce-cli, and containerd.io\n'
+  fi
+  printf '    - Enable and start the Docker service\n'
+  printf '    - Add the current user to the docker group (root-equivalent access)\n'
 }
 
 plan_none() {
@@ -2401,6 +2438,80 @@ install_cloudflare_warp() {
   run_as_root systemctl enable --now warp-svc.service
 }
 
+configure_docker_service() {
+  local user user_groups
+  run_as_root systemctl enable docker
+  run_as_root systemctl start docker
+
+  user="$(id -un)"
+  if [ "$user" = root ]; then
+    notice 'Running as root; skipping redundant docker group membership.'
+    return
+  fi
+  user_groups="$(id -nG "$user")"
+  case " $user_groups " in
+    *' docker '*) notice "${user} is already in the docker group; skipping." ;;
+    *) run_as_root usermod -aG docker "$user" ;;
+  esac
+  notice "Log out and back in before using Docker without sudo as ${user}."
+}
+
+install_docker_engine() {
+  local arch fingerprint gnupg_home key package source unavailable
+  local -a components missing_components
+  components=(docker-ce docker-ce-cli containerd.io)
+  missing_components=()
+  for package in "${components[@]}"; do
+    package_is_installed "$package" || missing_components+=("$package")
+  done
+
+  if [ "${#missing_components[@]}" -eq 0 ]; then
+    notice 'Basic Docker components are already installed; skipping repository refresh.'
+    configure_docker_service
+    return
+  fi
+
+  arch="$(dpkg --print-architecture)"
+  ensure_temp_dir
+  key="${TEMP_DIR}/docker.asc"
+  source="${TEMP_DIR}/docker.list"
+  gnupg_home="${TEMP_DIR}/docker-gnupg"
+
+  if $DRY_RUN; then
+    printf '+ download and verify Docker APT signing key\n'
+  else
+    mkdir -m 0700 "$gnupg_home"
+    download_file "https://download.docker.com/linux/${LINUX_DISTRO}/gpg" "$key"
+    fingerprint="$(
+      GNUPGHOME="$gnupg_home" gpg --batch --show-keys --with-colons "$key" |
+        awk -F: '$1 == "fpr" && !fingerprint {fingerprint = $10} END {print fingerprint}'
+    )"
+    [ "$fingerprint" = "$DOCKER_KEY_FINGERPRINT" ] ||
+      die "unexpected Docker signing key fingerprint: ${fingerprint:-missing}"
+  fi
+
+  printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] ' "$arch" >"$source"
+  printf 'https://download.docker.com/linux/%s %s stable\n' \
+    "$LINUX_DISTRO" "$LINUX_CODENAME" >>"$source"
+  run_as_root install -d -m 0755 /etc/apt/keyrings
+  run_as_root install -m 0644 "$key" /etc/apt/keyrings/docker.asc
+  run_as_root install -m 0644 "$source" /etc/apt/sources.list.d/docker.list
+  run_as_root apt-get update
+
+  if ! $DRY_RUN; then
+    unavailable=""
+    for package in "${missing_components[@]}"; do
+      package_is_available "$package" || unavailable="${unavailable}${unavailable:+ }$package"
+    done
+    [ -z "$unavailable" ] ||
+      die "Docker packages are unavailable for ${PLATFORM_LABEL}: $unavailable"
+  fi
+  run_as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    --no-install-recommends \
+    "${missing_components[@]}"
+  configure_docker_service
+}
+
 configure_cloudflare_warp_proxy() {
   if $DRY_RUN; then
     run warp-cli --accept-tos registration new
@@ -2460,6 +2571,11 @@ apply_warp() {
   install_cloudflare_warp
   section 'Configure Cloudflare WARP proxy'
   configure_cloudflare_warp_proxy
+}
+
+apply_docker() {
+  section 'Install Docker Engine'
+  install_docker_engine
 }
 
 apply_selected_options() {
