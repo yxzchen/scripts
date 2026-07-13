@@ -27,8 +27,6 @@ portForwards:
     proto: any
     ignore: true
 
-propagateProxyEnv: false
-
 containerd:
   system: false
   user: false

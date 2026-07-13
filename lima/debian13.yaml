@@ -14,6 +14,7 @@ networks:
 
 ssh:
   loadDotSSHPubKeys: true
+  overVsock: false
 
 portForwards:
   - guestIP: 0.0.0.0
@@ -22,8 +23,6 @@ portForwards:
   - guestIP: 127.0.0.1
     proto: any
     ignore: true
-
-propagateProxyEnv: false
 
 containerd:
   system: false
