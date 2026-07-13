@@ -43,17 +43,18 @@ provision:
       echo "ssh_deletekeys: false" > /etc/cloud/cloud.cfg.d/lima-local.cfg
 
       conf=/usr/lib/binfmt.d/rosetta.conf
+      override=/etc/binfmt.d/rosetta.conf
       entry=/proc/sys/fs/binfmt_misc/rosetta
 
       [ -x /mnt/lima-rosetta/rosetta ] || exit 0
       [ -f "$conf" ] || exit 0
 
-      # Preserve argv[0] when Rosetta handles amd64 executables.
-      sed -i 's/:OCF$/:POCF/' "$conf"
+      mkdir -p /etc/binfmt.d
+
+      if [ ! -f "$override" ] || ! grep -q ':POCF$' "$override"; then
+          sed 's/:OCF$/:POCF/' "$conf" > "$override"
+      fi
 
       if ! grep -q '^flags:.*P' "$entry" 2>/dev/null; then
-          if [ -e "$entry" ]; then
-              echo -1 > "$entry"
-          fi
           systemctl restart systemd-binfmt.service
       fi
