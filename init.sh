@@ -16,6 +16,7 @@ umask 022
 readonly SCRIPT_NAME="${0##*/}"
 readonly ZIM_INSTALL_URL="https://raw.githubusercontent.com/zimfw/install/master/install.zsh"
 readonly BREW_INSTALL_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+readonly UV_INSTALL_URL="https://astral.sh/uv/install.sh"
 readonly DOTFILES_BASE_URL="${DOTFILES_BASE_URL:-https://raw.githubusercontent.com/yxzchen/scripts/master}"
 readonly WARP_PROXY_PORT=40000
 readonly WARP_KEY_FINGERPRINT="C068A2B5771775193CBE1F2F6E2DD2174FA1C3BA"
@@ -31,6 +32,7 @@ LINUX_VERSION=""
 LINUX_CODENAME=""
 SELECTED_IDS=""
 BREW_BIN=""
+UV_BIN=""
 TEMP_DIR=""
 CURRENT_STEP=""
 FRP_RELEASE_RESOLVED=false
@@ -293,7 +295,7 @@ register_options() {
     register_option \
       dev-python dev \
       "Python workflow" \
-      "Python development files, venv, pip, pipx, and pre-commit." \
+      "Python development files and uv." \
       detail_dev_python packages_dev_python plan_dev_python apply_dev_python
 
     register_group \
@@ -718,11 +720,11 @@ packages_dev_debug() {
 }
 
 packages_dev_python() {
-  add_packages python3-dev python3-venv python3-pip pipx
+  add_packages ca-certificates curl python3-dev
 }
 
 packages_common() {
-  add_packages bat exiftool fd fzf htop ripgrep tree
+  add_packages bat exiftool fd fzf htop ripgrep tree uv
 }
 
 packages_lima() {
@@ -917,7 +919,7 @@ detail_dev_group() {
   printf '  C/C++ libraries       Common backend headers and libraries.\n'
   printf '  Testing and analysis  Formatting, tests, coverage, and analysis.\n'
   printf '  Debugging              Native debugging with gdb.\n'
-  printf '  Python workflow        Python, pipx, and pre-commit.\n'
+  printf '  Python workflow        Python development files and uv.\n'
 }
 
 detail_dev_build() {
@@ -939,15 +941,14 @@ detail_dev_debug() {
 }
 
 detail_dev_python() {
-  printf 'Packages\n  Python development files, venv, pip, and pipx.\n\n'
+  printf 'Packages\n  Python development files and the official uv standalone binaries.\n\n'
   printf 'Configuration\n'
-  printf '  Install pre-commit through pipx and configure its binary directory.\n'
-  printf '  The pipx binary directory is added to ~/.zshrc.\n'
+  printf '  Add the uv binary directory to ~/.zshrc.\n'
 }
 
 plan_dev_python() {
-  printf '    - Ensure the pipx binary directory is on PATH in ~/.zshrc\n'
-  printf '    - Install pre-commit with pipx when it is not already present\n'
+  printf '    - Install uv in ~/.local/bin with the official installer when absent\n'
+  printf '    - Ensure the uv binary directory is on PATH in ~/.zshrc\n'
 }
 
 detail_frp_group() {
@@ -1098,7 +1099,7 @@ detail_common() {
   printf 'Bootstrap\n  Download the official current Homebrew installer when brew is absent.\n\n'
   printf 'Shell integration\n'
   printf '  Add brew shellenv to ~/.zprofile once, for Apple Silicon or Intel.\n\n'
-  printf 'Formulae\n  bat, exiftool, fd, fzf, htop, ripgrep, and tree.\n'
+  printf 'Formulae\n  bat, exiftool, fd, fzf, htop, ripgrep, tree, and uv.\n'
 }
 
 detail_lima() {
@@ -2228,23 +2229,50 @@ ensure_line_in_file() {
   else
     [ -d "$parent" ] || run mkdir -p "$parent"
     printf '\n%s\n' "$line" >>"$file"
-    notice "Added the pipx binary directory to ${file}."
+    notice "Added the required PATH entry to ${file}."
   fi
 }
 
-apply_dev_python() {
-  local pipx_bin_dir path_line zshrc
-  section 'Configure development tools'
-  pipx_bin_dir="${PIPX_BIN_DIR:-$HOME/.local/bin}"
-  zshrc="$HOME/.zshrc"
-  path_line="export PATH=\"\$PATH:${pipx_bin_dir}\""
-  ensure_line_in_file "$path_line" "$zshrc"
-
-  if command -v pre-commit >/dev/null 2>&1 || [ -x "${pipx_bin_dir}/pre-commit" ]; then
-    notice 'pre-commit is already installed; skipping.'
-  else
-    run pipx install pre-commit
+find_uv() {
+  UV_BIN=""
+  if [ -x "$HOME/.local/bin/uv" ]; then
+    UV_BIN="$HOME/.local/bin/uv"
+  elif command -v uv >/dev/null 2>&1; then
+    UV_BIN="$(command -v uv)"
   fi
+}
+
+install_uv() {
+  local installer
+  find_uv
+  if [ -n "$UV_BIN" ]; then
+    notice "uv is already installed at ${UV_BIN}; skipping."
+    return
+  fi
+
+  UV_BIN="$HOME/.local/bin/uv"
+  if $DRY_RUN; then
+    printf '+ download %q to <secure-temporary-file>\n' "$UV_INSTALL_URL"
+    printf '+ env UV_UNMANAGED_INSTALL=%q sh <secure-temporary-file>\n' \
+      "$HOME/.local/bin"
+    return
+  fi
+
+  ensure_temp_dir
+  installer="${TEMP_DIR}/uv-install.sh"
+  download_file "$UV_INSTALL_URL" "$installer"
+  run env UV_UNMANAGED_INSTALL="$HOME/.local/bin" sh "$installer"
+  [ -x "$UV_BIN" ] || die "uv installer finished but ${UV_BIN} was not found"
+}
+
+apply_dev_python() {
+  local path_line uv_bin_dir zshrc
+  section 'Configure development tools'
+  uv_bin_dir="$HOME/.local/bin"
+  zshrc="$HOME/.zshrc"
+  path_line="export PATH=\"\$PATH:${uv_bin_dir}\""
+  install_uv
+  ensure_line_in_file "$path_line" "$zshrc"
 }
 
 create_frp_config() {
