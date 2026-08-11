@@ -1,7 +1,8 @@
 images:
-- location: "https://chuangtzu.ftp.acc.umu.se/images/cloud/trixie/20260623-2518/debian-13-genericcloud-arm64-20260623-2518.qcow2"
+- location: "https://cloud.debian.org/images/cloud/trixie/20260712-2537/debian-13-genericcloud-arm64-20260712-2537.qcow2"
   arch: "aarch64"
-  digest: "sha512:fd35e5ec7bd31bc3821ba43135574ac42bdf0ded4dc6e3c8a86995e00b4206db60f2a7782bb9d94188f2b302df782d3afb5b13bdeaba25efe8c39bc51cec83a8"
+  digest: "sha512:8543d795f2fde630eb66c492f245a8c1da19dedc636e0a8e7b3d0f95920e1a05aa911ef2d82d177d41cc53ced5fccbd2a3945d07fa5e15018914c4d864bb07ed"
+  variant: "genericcloud"
 
 vmType: "vz"
 
