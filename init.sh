@@ -254,8 +254,8 @@ register_options() {
       detail_ops_group
     register_option \
       ops-process ops \
-      "System diagnostics" \
-      "Process inspection, tracing, and system activity monitoring." \
+      "System and performance diagnostics" \
+      "Process inspection, tracing, activity monitoring, and perf profiling." \
       detail_ops_process packages_ops_process plan_none apply_noop
     register_option \
       ops-network ops \
@@ -265,28 +265,13 @@ register_options() {
     register_group \
       dev \
       "Development environment" \
-      "Build, performance, C/C++, debugging, and Python toolsets." \
+      "C/C++ and Python development toolsets." \
       detail_dev_group
     register_option \
       dev-build dev \
-      "Build toolchains" \
-      "GCC, CMake, Ninja, and pkg-config." \
+      "C/C++ development" \
+      "GCC, CMake, Ninja, pkg-config, OpenSSL headers, and gdb." \
       detail_dev_build packages_dev_build plan_none apply_noop
-    register_option \
-      dev-performance dev \
-      "Performance profiling" \
-      "Linux perf profiling tools." \
-      detail_dev_performance packages_dev_performance plan_none apply_noop
-    register_option \
-      dev-libs dev \
-      "C/C++ libraries" \
-      "OpenSSL development files." \
-      detail_dev_libs packages_dev_libs plan_none apply_noop
-    register_option \
-      dev-debug dev \
-      "Debugging" \
-      "Native debugging with gdb." \
-      detail_dev_debug packages_dev_debug plan_none apply_noop
     register_option \
       dev-python dev \
       "Python workflow" \
@@ -664,6 +649,11 @@ packages_base_transfer() {
 
 packages_ops_process() {
   add_packages procps psmisc lsof strace htop sysstat iotop
+  if [ "$LINUX_DISTRO" = "debian" ]; then
+    add_package linux-perf
+  else
+    add_package linux-tools-generic
+  fi
 }
 
 packages_ops_network() {
@@ -684,24 +674,8 @@ add_dnsutils_package() {
   fi
 }
 
-packages_dev_performance() {
-  if [ "$LINUX_DISTRO" = "debian" ]; then
-    add_package linux-perf
-  else
-    add_package linux-tools-generic
-  fi
-}
-
 packages_dev_build() {
-  add_packages build-essential cmake ninja-build pkg-config
-}
-
-packages_dev_libs() {
-  add_package libssl-dev
-}
-
-packages_dev_debug() {
-  add_package gdb
+  add_packages build-essential cmake ninja-build pkg-config libssl-dev gdb
 }
 
 packages_dev_python() {
@@ -876,13 +850,15 @@ detail_base_transfer() {
 
 detail_ops_group() {
   printf 'Select the entire group or choose individual child options:\n\n'
-  printf '  System diagnostics  Process inspection, tracing, and activity monitoring.\n'
-  printf '  Network diagnostics Connectivity, routing, DNS, and packets.\n\n'
+  printf '  System and performance Process inspection, tracing, activity, and perf.\n'
+  printf '  Network diagnostics   Connectivity, routing, DNS, and packets.\n\n'
   printf 'No child option enables a daemon or persistent service.\n'
 }
 
 detail_ops_process() {
-  printf 'Packages\n  procps, psmisc, lsof, strace, htop, sysstat, and iotop.\n'
+  printf 'Packages\n  procps, psmisc, lsof, strace, htop, sysstat, iotop, and perf.\n\n'
+  printf 'The perf package is selected separately for Debian and Ubuntu.\n'
+  printf 'Some perf operations require root privileges or matching kernel features.\n'
 }
 
 detail_ops_network() {
@@ -891,31 +867,15 @@ detail_ops_network() {
   printf '  DNS tools use bind9-dnsutils when available, with dnsutils as fallback.\n'
 }
 
-detail_dev_performance() {
-  printf 'Packages\n  perf.\n\n'
-  printf 'The kernel tools package is selected separately for Debian and Ubuntu.\n'
-  printf 'Some perf operations require root privileges or matching kernel features.\n'
-}
-
 detail_dev_group() {
   printf 'Select the entire group or choose individual child options:\n\n'
-  printf '  Build toolchains       Compilers and build systems.\n'
-  printf '  Performance profiling Linux perf profiling tools.\n'
-  printf '  C/C++ libraries       OpenSSL development files.\n'
-  printf '  Debugging              Native debugging with gdb.\n'
-  printf '  Python workflow        The uv Python package and project manager.\n'
+  printf '  C/C++ development  GCC, build systems, OpenSSL headers, and gdb.\n'
+  printf '  Python workflow    The uv Python package and project manager.\n'
 }
 
 detail_dev_build() {
-  printf 'Packages\n  GCC/build-essential, CMake, Ninja, and pkg-config.\n'
-}
-
-detail_dev_libs() {
-  printf 'Packages\n  OpenSSL development files.\n'
-}
-
-detail_dev_debug() {
-  printf 'Packages\n  gdb.\n'
+  printf 'Packages\n  GCC/build-essential, CMake, Ninja, pkg-config, OpenSSL development\n'
+  printf '  files, and gdb.\n'
 }
 
 detail_dev_python() {
