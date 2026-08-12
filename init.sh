@@ -270,23 +270,18 @@ register_options() {
     register_option \
       dev-build dev \
       "Build toolchains" \
-      "GCC, Clang/LLVM, CMake, Ninja, Autotools, and ccache." \
+      "GCC, CMake, Ninja, and pkg-config." \
       detail_dev_build packages_dev_build plan_none apply_noop
     register_option \
       dev-performance dev \
-      "Performance and eBPF" \
-      "NUMA, perf, bpftrace, and bpftool tooling." \
+      "Performance profiling" \
+      "Linux perf profiling tools." \
       detail_dev_performance packages_dev_performance plan_none apply_noop
     register_option \
       dev-libs dev \
       "C/C++ libraries" \
-      "OpenSSL, io_uring, gflags/glog, ncurses, and NUMA headers." \
+      "OpenSSL development files." \
       detail_dev_libs packages_dev_libs plan_none apply_noop
-    register_option \
-      dev-quality dev \
-      "Testing and static analysis" \
-      "Formatting, tests, benchmarks, coverage, and static analysis." \
-      detail_dev_quality packages_dev_quality plan_none apply_noop
     register_option \
       dev-debug dev \
       "Debugging" \
@@ -295,7 +290,7 @@ register_options() {
     register_option \
       dev-python dev \
       "Python workflow" \
-      "Python development files and uv." \
+      "Install the uv Python package and project manager." \
       detail_dev_python packages_dev_python plan_dev_python apply_dev_python
 
     register_group \
@@ -673,7 +668,7 @@ packages_ops_process() {
 
 packages_ops_network() {
   add_packages \
-    iputils-ping traceroute mtr-tiny whois \
+    iputils-ping traceroute mtr-tiny \
     tcpdump nmap netcat-openbsd socat iproute2 ethtool
   add_dnsutils_package
 }
@@ -690,29 +685,19 @@ add_dnsutils_package() {
 }
 
 packages_dev_performance() {
-  add_packages numactl bpftrace
   if [ "$LINUX_DISTRO" = "debian" ]; then
-    add_packages bpftool linux-perf
+    add_package linux-perf
   else
     add_package linux-tools-generic
   fi
 }
 
 packages_dev_build() {
-  add_packages \
-    build-essential autoconf automake \
-    clang clangd lld \
-    cmake ninja-build pkg-config libtool ccache
+  add_packages build-essential cmake ninja-build pkg-config
 }
 
 packages_dev_libs() {
-  add_packages \
-    libncurses-dev libssl-dev liburing-dev \
-    libgoogle-glog-dev libgflags-dev libnuma-dev
-}
-
-packages_dev_quality() {
-  add_packages clang-format clang-tidy libgtest-dev libbenchmark-dev gcovr cppcheck
+  add_package libssl-dev
 }
 
 packages_dev_debug() {
@@ -720,7 +705,7 @@ packages_dev_debug() {
 }
 
 packages_dev_python() {
-  add_packages ca-certificates curl python3-dev
+  add_packages ca-certificates curl
 }
 
 packages_common() {
@@ -901,39 +886,32 @@ detail_ops_process() {
 }
 
 detail_ops_network() {
-  printf 'Packages\n  ping, DNS tools, traceroute, mtr, whois, tcpdump, nmap,\n'
+  printf 'Packages\n  ping, DNS tools, traceroute, mtr, tcpdump, nmap,\n'
   printf '  netcat, socat, iproute2, and ethtool.\n'
   printf '  DNS tools use bind9-dnsutils when available, with dnsutils as fallback.\n'
 }
 
 detail_dev_performance() {
-  printf 'Packages\n  numactl, bpftrace, bpftool, and perf.\n\n'
+  printf 'Packages\n  perf.\n\n'
   printf 'The kernel tools package is selected separately for Debian and Ubuntu.\n'
-  printf 'Some commands require root privileges or matching kernel features at runtime.\n'
+  printf 'Some perf operations require root privileges or matching kernel features.\n'
 }
 
 detail_dev_group() {
   printf 'Select the entire group or choose individual child options:\n\n'
   printf '  Build toolchains       Compilers and build systems.\n'
-  printf '  Performance and eBPF  NUMA, perf, bpftrace, and bpftool.\n'
-  printf '  C/C++ libraries       Common backend headers and libraries.\n'
-  printf '  Testing and analysis  Formatting, tests, coverage, and analysis.\n'
+  printf '  Performance profiling Linux perf profiling tools.\n'
+  printf '  C/C++ libraries       OpenSSL development files.\n'
   printf '  Debugging              Native debugging with gdb.\n'
-  printf '  Python workflow        Python development files and uv.\n'
+  printf '  Python workflow        The uv Python package and project manager.\n'
 }
 
 detail_dev_build() {
-  printf 'Packages\n  GCC/build-essential, Clang/LLVM, CMake, Ninja, Autotools,\n'
-  printf '  pkg-config, libtool, and ccache.\n'
+  printf 'Packages\n  GCC/build-essential, CMake, Ninja, and pkg-config.\n'
 }
 
 detail_dev_libs() {
-  printf 'Packages\n  OpenSSL, io_uring, gflags/glog, ncurses, and NUMA headers.\n'
-}
-
-detail_dev_quality() {
-  printf 'Packages\n  clang-format, clang-tidy, GoogleTest, Google Benchmark,\n'
-  printf '  gcovr, and cppcheck.\n'
+  printf 'Packages\n  OpenSSL development files.\n'
 }
 
 detail_dev_debug() {
@@ -941,7 +919,7 @@ detail_dev_debug() {
 }
 
 detail_dev_python() {
-  printf 'Packages\n  Python development files and the official uv standalone binaries.\n\n'
+  printf 'Packages\n  The official uv standalone binaries.\n\n'
   printf 'Configuration\n'
   printf '  Add the uv binary directory to ~/.zshrc.\n'
 }
