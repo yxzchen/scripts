@@ -5,7 +5,7 @@ images:
 
 vmType: "vz"
 
-cpus: 8
+cpus: 10
 memory: 16GiB
 disk: 100GiB
 
